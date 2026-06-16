@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="週予算クエスト">
+<meta name="theme-color" content="#0B0D16">
+<title>週予算クエスト</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN',system-ui,-apple-system,sans-serif;
+    background:radial-gradient(120% 80% at 50% -10%, #20243A 0%, #11131F 48%, #0B0D16 100%) fixed;
+    color:#E8EAF2; min-height:100vh;
+  }
+  .tnum{font-variant-numeric:tabular-nums;}
+  .wrap{max-width:480px;margin:0 auto;padding:max(env(safe-area-inset-top),20px) 20px calc(env(safe-area-inset-bottom) + 40px);}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
+  input{font-family:inherit;}
+  .card{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);}
+  .row-tap{transition:transform .12s;}
+  .row-tap:active{transform:scale(.93);}
+  .chip:active{transform:scale(.95);}
+
+  @keyframes coachPop{0%{opacity:0;transform:translateY(-6px) scale(.98)}100%{opacity:1;transform:none}}
+  .coach-pop{animation:coachPop .4s cubic-bezier(.22,1,.36,1);}
+  @keyframes rowIn{0%{opacity:0;transform:translateX(-8px)}100%{opacity:1;transform:none}}
+  .row-in{animation:rowIn .35s ease;}
+  @keyframes hpShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-5px)}40%{transform:translateX(5px)}60%{transform:translateX(-3px)}80%{transform:translateX(3px)}}
+  .hp-shake{animation:hpShake .42s ease;}
+  @keyframes pulseReady{0%,100%{box-shadow:0 10px 26px rgba(129,140,248,.5)}50%{box-shadow:0 10px 34px rgba(129,140,248,.85)}}
+  .pulse-ready{animation:pulseReady 1.8s ease-in-out infinite;}
+
+  .reward-layer{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;z-index:60;gap:14px;}
+  @keyframes badgePop{0%{opacity:0;transform:scale(.3)}35%{opacity:1;transform:scale(1.12)}55%{transform:scale(1)}80%{opacity:1}100%{opacity:0;transform:scale(1)}}
+  .reward-badge{width:96px;height:96px;border-radius:30px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#34D399,#10B981);box-shadow:0 16px 50px rgba(16,185,129,.6);animation:badgePop 1s ease forwards;}
+  @keyframes textFloat{0%{opacity:0;transform:translateY(10px)}30%{opacity:1;transform:translateY(0)}80%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
+  .reward-text{font-size:18px;font-weight:800;color:#fff;text-shadow:0 2px 12px rgba(0,0,0,.5);animation:textFloat 1s ease forwards;}
+  .spark{position:absolute;width:9px;height:9px;border-radius:9px;top:50%;left:50%;opacity:0;}
+  @keyframes sparkFly{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:var(--end) scale(.2)}}
+
+  .sheet-backdrop{position:fixed;inset:0;background:rgba(5,6,12,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);display:flex;align-items:flex-end;justify-content:center;z-index:70;animation:fade .25s ease;}
+  @keyframes fade{0%{opacity:0}100%{opacity:1}}
+  .sheet{width:100%;max-width:480px;border-radius:28px 28px 0 0;padding:22px 20px calc(env(safe-area-inset-bottom) + 28px);max-height:88vh;overflow-y:auto;background:#14172A;border-top:1px solid rgba(255,255,255,.1);animation:slideUp .32s cubic-bezier(.22,1,.36,1);}
+  @keyframes slideUp{0%{transform:translateY(100%)}100%{transform:none}}
+
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* ----------------------------- icons ----------------------------- */
+const SVG = {
+  gear:'<path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  x:'<path d="M18 6L6 18M6 6l12 12"/>',
+  trash:'<path d="M3 6h18M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  back:'<path d="M21 4H8l-7 8 7 8h13a2 2 0 002-2V6a2 2 0 00-2-2z"/><path d="M18 9l-6 6M12 9l6 6"/>',
+  cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  coin:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.5a1.5 1.5 0 010 3H11a1.5 1.5 0 000 3h3.5"/>',
+  shield:'<path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/>',
+  spark:'<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17l-1.9-5.1L4.5 10l5.6-1.4L12 3z"/>'
+};
+function icon(name, size, color, sw){
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color||'currentColor'}" stroke-width="${sw||2}" stroke-linecap="round" stroke-linejoin="round">${SVG[name]}</svg>`;
+}
+
+/* ----------------------------- helpers ----------------------------- */
+const PALETTE=["#818CF8","#34D399","#FBBF24","#F472B6","#22D3EE","#A78BFA","#FB7185","#4ADE80"];
+const yen=n=>"¥"+Math.round(n).toLocaleString("ja-JP");
+let _id=100; const uid=()=>Date.now().toString(36)+"-"+(_id++);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function getWeekInfo(now=new Date()){
+  const d=new Date(now), mi=(d.getDay()+6)%7;
+  const s=new Date(d); s.setHours(0,0,0,0); s.setDate(d.getDate()-mi);
+  return {weekStart:s.getTime(), dayNumber:mi+1, remainingDays:7-mi};
+}
+function hpTheme(p){
+  if(p>50) return {main:"#34D399",glow:"rgba(52,211,153,.55)",soft:"rgba(52,211,153,.14)"};
+  if(p>20) return {main:"#FBBF24",glow:"rgba(251,191,36,.55)",soft:"rgba(251,191,36,.14)"};
+  return {main:"#FB7185",glow:"rgba(251,113,133,.55)",soft:"rgba(251,113,133,.14)"};
+}
+function coach(p,spent){
+  if(spent<=0) return {face:"🌱",title:"今週スタート！",text:"冒険の始まりだ。気持ちよく記録していこう。"};
+  if(p>=80) return {face:"😇",title:"守護神級のペース！",text:"素晴らしい。この調子なら余裕で守りきれる。"};
+  if(p>=50) return {face:"🙂",title:"いい調子",text:"堅実そのもの。このペースをキープしよう。"};
+  if(p>=20) return {face:"😼",title:"そろそろ慎重に",text:"残りHPを見ながら、ここからは一歩ずつ。"};
+  if(p>0)  return {face:"🔥",title:"ピンチ！",text:"今週は自炊モード発動。HPを大事に使おう。"};
+  return {face:"💀",title:"HP切れ…！",text:"今週は使い切った。リベンジは来週に持ち越しだ。"};
+}
+
+/* ----------------------------- state ----------------------------- */
+const KEY="wbq_v1";
+const DEFAULT_CATS=[
+  {id:uid(),name:"食費",color:"#34D399",emoji:"🍚"},
+  {id:uid(),name:"日用品",color:"#22D3EE",emoji:"🧴"},
+  {id:uid(),name:"趣味・娯楽",color:"#A78BFA",emoji:"🎮"},
+  {id:uid(),name:"その他",color:"#FBBF24",emoji:"📦"},
+];
+let state={
+  monthlyBudget:60000,
+  categories:JSON.parse(JSON.stringify(DEFAULT_CATS)),
+  fixedCosts:[],
+  expenses:[],
+  amount:"",
+  selectedCat:null,
+  showSettings:false,
+  newCatName:"",
+  newFixName:"",
+  newFixAmt:"",
+  justRecorded:false,
+};
+function load(){
+  try{
+    const raw=localStorage.getItem(KEY);
+    if(!raw) return;
+    const d=JSON.parse(raw);
+    if(typeof d.monthlyBudget==="number") state.monthlyBudget=d.monthlyBudget;
+    if(Array.isArray(d.categories)&&d.categories.length) state.categories=d.categories;
+    if(Array.isArray(d.fixedCosts)) state.fixedCosts=d.fixedCosts;
+    if(Array.isArray(d.expenses)) state.expenses=d.expenses;
+  }catch(e){}
+}
+function save(){
+  try{
+    localStorage.setItem(KEY,JSON.stringify({
+      monthlyBudget:state.monthlyBudget,
+      categories:state.categories,
+      fixedCosts:state.fixedCosts,
+      expenses:state.expenses,
+    }));
+  }catch(e){}
+}
+
+/* ----------------------------- derive ----------------------------- */
+function derive(){
+  const w=getWeekInfo();
+  const fixedTotal=(state.fixedCosts||[]).reduce((s,f)=>s+(Number(f.amount)||0),0);
+  const variableBudget=Math.max(0,state.monthlyBudget-fixedTotal);
+  const weeklyBudget=variableBudget>0?variableBudget/4.3:0;
+  const weekExp=state.expenses.filter(e=>e.ts>=w.weekStart);
+  const spent=weekExp.reduce((s,e)=>s+e.amount,0);
+  const remaining=weeklyBudget-spent;
+  const hp=weeklyBudget>0?Math.max(0,Math.min(100,remaining/weeklyBudget*100)):100;
+  const map={};
+  weekExp.forEach(e=>{map[e.categoryId]=(map[e.categoryId]||0)+e.amount;});
+  const chart=Object.entries(map).map(([id,value])=>{
+    const c=catById(id); return {id,value,name:c.name,color:c.color};
+  }).sort((a,b)=>b.value-a.value);
+
+  // 月集計
+  const now=new Date();
+  const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
+  const monthEnd=new Date(now.getFullYear(),now.getMonth()+1,1).getTime();
+  const daysInMonth=new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
+  const dayOfMonth=now.getDate();
+  const mExp=state.expenses.filter(e=>e.ts>=monthStart&&e.ts<monthEnd);
+  const mSpent=mExp.reduce((s,e)=>s+e.amount,0);
+  const month={
+    spent:mSpent,
+    fixedTotal,
+    variableBudget,
+    remaining:variableBudget-mSpent,
+    usedPct:variableBudget>0?Math.min(100,mSpent/variableBudget*100):0,
+    dayOfMonth, daysInMonth,
+    remDays:daysInMonth-dayOfMonth+1,
+    projected:dayOfMonth>0?mSpent/dayOfMonth*daysInMonth:0,
+  };
+  return {w,weeklyBudget,weekExp,spent,remaining,hp,chart,month};
+}
+function catById(id){ return state.categories.find(c=>c.id===id)||{name:"削除済み",color:"#64748B",emoji:"🏷️"}; }
+
+/* ----------------------------- donut ----------------------------- */
+function donut(data,total){
+  const R=54,C=2*Math.PI*R; let off=0;
+  const gap=data.length>1?4:0;
+  const segs=data.map(d=>{
+    const len=Math.max(0,(total>0?d.value/total:0)*C-gap);
+    const s=`<circle cx="70" cy="70" r="${R}" fill="none" stroke="${d.color}" stroke-width="16" stroke-dasharray="${len} ${C-len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"/>`;
+    off+=len+gap; return s;
+  }).join("");
+  return `<svg viewBox="0 0 140 140" width="150" height="150">${segs}</svg>`;
+}
+
+/* ----------------------------- view ----------------------------- */
+function view(){
+  const d=derive();
+  const t=hpTheme(d.hp);
+  const m=coach(d.hp,d.spent);
+  const perDay=d.w.remainingDays>0?d.remaining/d.w.remainingDays:d.remaining;
+  const canRecord=Number(state.amount)>0&&state.selectedCat;
+
+  const chips=state.categories.map(c=>{
+    const on=state.selectedCat===c.id;
+    return `<button class="chip row-tap" data-action="selectCat" data-id="${c.id}" style="display:flex;align-items:center;gap:6px;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:700;background:${on?c.color:'rgba(255,255,255,.05)'};color:${on?'#0B0D16':'#C7CBDC'};border:1px solid ${on?c.color:'rgba(255,255,255,.1)'};box-shadow:${on?`0 6px 16px ${c.color}55`:'none'};transition:transform .12s">
+      <span style="font-size:15px;line-height:1">${c.emoji||"🏷️"}</span>${esc(c.name)}</button>`;
+  }).join("");
+
+  const keys=["1","2","3","4","5","6","7","8","9","clear","0","back"];
+  const pad=keys.map(k=>{
+    const dim=(k==="clear"||k==="back");
+    const inner=k==="back"?icon("back",20,"#8A8FA8"):k==="clear"?"C":k;
+    return `<button class="row-tap" data-action="key" data-k="${k}" style="display:flex;align-items:center;justify-content:center;height:52px;border-radius:16px;font-size:20px;font-weight:700;background:${dim?'rgba(255,255,255,.04)':'rgba(255,255,255,.07)'};color:${dim?'#8A8FA8':'#E8EAF2'};border:1px solid rgba(255,255,255,.07)">${inner}</button>`;
+  }).join("");
+
+  const ticks=[20,40,60,80].map(p=>`<div style="position:absolute;top:0;height:100%;left:${p}%;width:2px;background:rgba(11,13,22,.55)"></div>`).join("");
+
+  let chartBlock;
+  if(d.chart.length===0){
+    chartBlock=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;color:#5A5F7A">${icon("spark",26,"#5A5F7A")}<p style="font-size:14px;margin-top:8px">まだ記録なし。最初の一手を。</p></div>`;
+  }else{
+    const legend=d.chart.map(c=>`<div style="display:flex;align-items:center;justify-content:space-between">
+        <span style="display:flex;align-items:center;gap:8px;font-size:14px;color:#C7CBDC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:9px;height:9px;border-radius:9px;background:${c.color};flex-shrink:0"></span>${esc(c.name)}</span>
+        <span class="tnum" style="font-size:14px;color:#E8EAF2">${yen(c.value)}</span></div>`).join("");
+    chartBlock=`<div style="display:flex;align-items:center;gap:8px">
+        <div style="width:150px;height:150px;position:relative;flex-shrink:0">${donut(d.chart,d.spent)}
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">
+            <span style="font-size:12px;color:#8A8FA8">合計</span>
+            <span class="tnum" style="font-size:16px;font-weight:800">${yen(d.spent)}</span></div></div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">${legend}</div></div>`;
+  }
+
+  const history=d.weekExp.slice().sort((a,b)=>b.ts-a.ts).map(e=>{
+    const c=catById(e.categoryId);
+    const dt=new Date(e.ts).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
+    return `<div class="row-in" style="display:flex;align-items:center;gap:12px;border-radius:16px;padding:10px 14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)">
+      <div style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:12px;background:${c.color}22;font-size:17px">${c.emoji||"🏷️"}</div>
+      <div style="flex:1;min-width:0"><p style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</p><p style="font-size:12px;color:#7E84A0">${dt}</p></div>
+      <span class="tnum" style="font-size:14px;font-weight:700">${yen(e.amount)}</span>
+      <button class="row-tap" data-action="delExpense" data-id="${e.id}" aria-label="削除" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.04)">${icon("x",15,"#8A8FA8")}</button></div>`;
+  }).join("");
+
+  const mb=d.month;
+  const mColor=mb.variableBudget<=0?"#818CF8":(mb.projected<=mb.variableBudget?"#34D399":(mb.projected<=mb.variableBudget*1.1?"#FBBF24":"#FB7185"));
+  const monthBlock=`<div style="margin-top:16px;border-radius:20px;padding:16px 18px;background:rgba(255,255,255,.025);border:1px solid rgba(255,255,255,.07)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <span style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#9AA0B8">今月の進捗（変動費）</span>
+      <span style="font-size:12px;color:#9AA0B8">今月${mb.dayOfMonth}日目 ・ 残り${mb.remDays}日</span>
+    </div>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:8px">
+      <span><span style="font-size:11px;color:#7E84A0">使った変動費</span><br><span class="tnum" style="font-size:22px;font-weight:800">${yen(mb.spent)}</span></span>
+      <span class="tnum" style="font-size:13px;color:#7E84A0">/ ${yen(mb.variableBudget)}</span>
+    </div>
+    <div style="position:relative;width:100%;height:10px;border-radius:6px;overflow:hidden;background:rgba(0,0,0,.3)">
+      <div style="position:absolute;top:0;left:0;height:100%;width:${mb.usedPct}%;border-radius:6px;background:${mColor};transition:width .5s cubic-bezier(.22,1,.36,1)"></div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px">
+      <span style="font-size:12px;color:#9AA0B8">残り <b style="color:#E8EAF2">${yen(Math.max(0,mb.remaining))}</b></span>
+      <span style="font-size:12px;color:${mColor}">この調子だと月末 <b>${yen(mb.projected)}</b></span>
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:11px;color:#7E84A0">固定費（確保済み）</span>
+      <span class="tnum" style="font-size:12px;color:#9AA0B8">${yen(mb.fixedTotal)}</span>
+    </div>
+  </div>`;
+
+  return `<div class="wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:14px;background:linear-gradient(135deg,#818CF8,#6366F1);box-shadow:0 6px 18px rgba(99,102,241,.45)">${icon("shield",20,"#fff",2.4)}</div>
+        <div><h1 style="font-size:18px;font-weight:800;letter-spacing:.03em;line-height:1">週予算クエスト</h1><p style="font-size:12px;margin-top:4px;color:#8A8FA8">HPを守りきれ。今週の冒険。</p></div>
+      </div>
+      <button class="row-tap" data-action="openSettings" aria-label="設定" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)">${icon("gear",19,"#C7CBDC")}</button>
+    </div>
+
+    <div class="coach-pop" style="display:flex;align-items:center;gap:12px;border-radius:16px;padding:12px 16px;margin-bottom:16px;background:${t.soft};border:1px solid ${t.main}55">
+      <span style="font-size:30px;line-height:1">${m.face}</span>
+      <div style="min-width:0"><p style="font-size:14px;font-weight:800;color:${t.main}">${m.title}</p><p style="font-size:12px;margin-top:2px;line-height:1.4;color:#C2C6D8">${m.text}</p></div>
+    </div>
+
+    <div id="hpcard" class="${state.justRecorded?'hp-shake':''}" style="border-radius:26px;padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);box-shadow:0 18px 40px rgba(0,0,0,.4)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#9AA0B8">今週のHP（残予算）</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:12px;color:#9AA0B8">${icon("cal",13,"#9AA0B8")}今週${d.w.dayNumber}日目 ・ 残り${d.w.remainingDays}日</span>
+      </div>
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:12px">
+        <span class="tnum" style="font-size:34px;font-weight:800;color:${t.main};letter-spacing:-.02em">${yen(Math.max(0,d.remaining))}</span>
+        <span class="tnum" style="font-size:14px;color:#7E84A0">/ ${yen(d.weeklyBudget)}</span>
+      </div>
+      <div style="position:relative;width:100%;height:22px;border-radius:12px;overflow:hidden;background:rgba(0,0,0,.35);box-shadow:inset 0 2px 5px rgba(0,0,0,.5)">
+        <div style="position:absolute;top:0;left:0;height:100%;width:${d.hp}%;border-radius:12px;background:linear-gradient(90deg,${t.main},${t.main}cc);box-shadow:0 0 16px ${t.glow};transition:width .5s cubic-bezier(.22,1,.36,1)">
+          <div style="position:absolute;top:0;left:0;width:100%;height:45%;border-radius:12px 12px 0 0;background:linear-gradient(180deg,rgba(255,255,255,.45),rgba(255,255,255,0))"></div></div>
+        ${ticks}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+        <span style="display:flex;align-items:center;gap:6px;font-size:12px;color:#9AA0B8">${icon("coin",14,t.main)}${d.remaining>=0?`今日から <b style="color:#E8EAF2">&nbsp;${yen(perDay)}&nbsp;</b>/日 使える`:`予算を <b style="color:${t.main}">&nbsp;${yen(-d.remaining)}&nbsp;</b> オーバー`}</span>
+        <span class="tnum" style="font-size:12px;font-weight:800;color:${t.main}">HP ${Math.round(d.hp)}%</span>
+      </div>
+    </div>
+
+    ${monthBlock}
+
+    <div class="card" style="margin-top:16px;border-radius:26px;padding:18px">
+      <div style="text-align:center;margin-bottom:12px">
+        <p style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:4px">金額</p>
+        <p class="tnum" style="font-size:40px;font-weight:800;letter-spacing:-.02em;color:${state.amount?'#fff':'#454A66'}">${state.amount?yen(Number(state.amount)):"¥0"}</p>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px">
+        ${chips}
+        <button class="chip row-tap" data-action="openSettings" style="display:flex;align-items:center;gap:4px;border-radius:999px;padding:8px 12px;font-size:14px;font-weight:700;background:rgba(255,255,255,.04);color:#8A8FA8;border:1px dashed rgba(255,255,255,.18)">${icon("plus",15,"#8A8FA8")}追加</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">${pad}</div>
+      <button data-action="record" class="${canRecord?'pulse-ready':''}" style="width:100%;height:56px;border-radius:18px;font-size:17px;font-weight:800;letter-spacing:.04em;cursor:${canRecord?'pointer':'not-allowed'};color:${canRecord?'#0B0D16':'#5A5F7A'};background:${canRecord?'linear-gradient(135deg,#A5B4FC,#818CF8)':'rgba(255,255,255,.05)'};box-shadow:${canRecord?'0 10px 26px rgba(129,140,248,.5)':'none'};transition:transform .12s">
+        ${canRecord?"記録する ⚔️":(state.selectedCat?"金額を入力":"カテゴリを選択")}</button>
+    </div>
+
+    <div class="card" style="margin-top:16px;border-radius:26px;padding:18px">
+      <p style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:4px">今週の支出の内訳</p>
+      ${chartBlock}
+    </div>
+
+    <div style="margin-top:16px">
+      <p style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:8px;padding:0 4px">記録の履歴</p>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${d.weekExp.length===0?'<p style="font-size:14px;text-align:center;padding:16px 0;color:#5A5F7A">今週の記録はまだありません</p>':history}
+      </div>
+    </div>
+  </div>
+  ${state.showSettings?settingsView(d):""}`;
+}
+
+function settingsView(d){
+  const cats=state.categories.map(c=>`<div style="display:flex;align-items:center;gap:12px;border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.04)">
+      <div style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:${c.color}22;font-size:15px">${c.emoji||"🏷️"}</div>
+      <span style="flex:1;font-size:14px;font-weight:700">${esc(c.name)}</span>
+      <button class="row-tap" data-action="delCat" data-id="${c.id}" aria-label="削除" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba(251,113,133,.12)">${icon("trash",15,"#FB7185")}</button></div>`).join("");
+  const fixed=(state.fixedCosts||[]).map(f=>`<div style="display:flex;align-items:center;gap:12px;border-radius:12px;padding:10px 12px;background:rgba(255,255,255,.04)">
+      <span style="flex:1;font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(f.name)}</span>
+      <span class="tnum" style="font-size:14px;font-weight:700;color:#C7CBDC">${yen(Number(f.amount)||0)}</span>
+      <button class="row-tap" data-action="delFixed" data-id="${f.id}" aria-label="削除" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba(251,113,133,.12)">${icon("trash",15,"#FB7185")}</button></div>`).join("");
+  return `<div class="sheet-backdrop" data-action="closeSettings">
+    <div class="sheet" data-stop="1">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:16px;font-weight:800">設定</h2>
+        <button class="row-tap" data-action="closeSettings" style="display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.06)">${icon("x",18,"#C7CBDC")}</button>
+      </div>
+      <label style="display:block;font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:8px">今月の総予算（手取りなど）</label>
+      <div style="display:flex;align-items:center;gap:8px;border-radius:16px;padding:12px 16px;margin-bottom:16px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1)">
+        <span style="font-size:18px;font-weight:700;color:#8A8FA8">¥</span>
+        <input data-field="budget" data-action="budget" inputmode="numeric" value="${state.monthlyBudget||''}" placeholder="60000" class="tnum" style="flex:1;background:transparent;outline:none;border:none;font-size:18px;font-weight:700;color:#fff">
+      </div>
+
+      <label style="display:block;font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:6px">固定費（毎月かならず出ていくお金）</label>
+      <p style="font-size:11px;color:#7E84A0;margin-bottom:8px">家賃・通信費・サブスクなど。先に確保され、週予算からは除外されます。</p>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">${fixed||'<p style="font-size:13px;color:#5A5F7A;padding:2px 2px">まだ固定費はありません</p>'}</div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input data-field="fixname" data-action="fixname" value="${esc(state.newFixName)}" placeholder="項目名（例：家賃）" style="flex:1;min-width:0;border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);outline:none;font-size:14px;font-weight:700;color:#fff">
+        <input data-field="fixamt" data-action="fixamt" inputmode="numeric" value="${esc(state.newFixAmt)}" placeholder="金額" class="tnum" style="width:84px;flex-shrink:0;border-radius:12px;padding:12px 10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);outline:none;font-size:14px;font-weight:700;color:#fff">
+        <button class="row-tap" data-action="addFixed" aria-label="固定費を追加" style="display:flex;align-items:center;justify-content:center;width:46px;flex-shrink:0;border-radius:12px;background:linear-gradient(135deg,#A5B4FC,#818CF8);color:#0B0D16">${icon("plus",18,"#0B0D16",2.6)}</button>
+      </div>
+
+      <div style="border-radius:14px;padding:12px 14px;margin-bottom:24px;background:rgba(129,140,248,.1);border:1px solid rgba(129,140,248,.25)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;color:#9AA0B8">自由に使える変動費</span><b id="variableVal" class="tnum" style="font-size:15px;color:#fff">${yen(d.month.variableBudget)}</b></div>
+        <div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:12px;color:#9AA0B8">→ 1週間あたり（÷4.3）</span><b id="weekBudgetVal" class="tnum" style="font-size:15px;color:#A5B4FC">${yen(d.weeklyBudget)}</b></div>
+      </div>
+
+      <label style="display:block;font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:8px">カテゴリ管理</label>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">${cats}</div>
+      <div style="display:flex;gap:8px">
+        <input data-field="newcat" data-action="newcat" value="${esc(state.newCatName)}" placeholder="新しいカテゴリ名" style="flex:1;min-width:0;border-radius:12px;padding:12px 14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);outline:none;font-size:14px;font-weight:700;color:#fff">
+        <button class="row-tap" data-action="addCat" style="display:flex;align-items:center;gap:4px;border-radius:12px;padding:0 16px;flex-shrink:0;font-weight:700;font-size:14px;background:linear-gradient(135deg,#A5B4FC,#818CF8);color:#0B0D16">${icon("plus",16,"#0B0D16",2.6)}追加</button>
+      </div>
+    </div></div>`;
+}
+
+/* ----------------------------- reward ----------------------------- */
+function fireReward(){
+  const layer=document.createElement("div");
+  layer.className="reward-layer";
+  const ends=["translate(-70px,-60px)","translate(70px,-55px)","translate(-80px,40px)","translate(75px,50px)","translate(0,-85px)","translate(10px,80px)"];
+  const cols=["#FDE68A","#A5B4FC","#6EE7B7","#FCA5A5","#FDE68A","#A5B4FC"];
+  layer.innerHTML=`<div class="reward-badge">${icon("check",40,"#fff",3.5)}</div><div class="reward-text">ナイス記録！</div>`+
+    ends.map((e,i)=>`<span class="spark" style="background:${cols[i]};--end:${e};animation:sparkFly ${0.7+i*0.02}s ease-out forwards"></span>`).join("");
+  document.body.appendChild(layer);
+  setTimeout(()=>layer.remove(),1100);
+}
+
+/* ----------------------------- render ----------------------------- */
+const app=document.getElementById("app");
+function render(){
+  const ae=document.activeElement;
+  const fid=ae&&ae.dataset?ae.dataset.field:null;
+  const winY=window.scrollY;
+  const sheetEl=app.querySelector(".sheet");
+  const sheetY=sheetEl?sheetEl.scrollTop:0;
+  app.innerHTML=view();
+  if(state.justRecorded) state.justRecorded=false;
+  const newSheet=app.querySelector(".sheet");
+  if(newSheet) newSheet.scrollTop=sheetY;
+  window.scrollTo(0,winY);
+  if(fid){ const el=app.querySelector(`[data-field="${fid}"]`); if(el){ el.focus({preventScroll:true}); try{const L=el.value.length; el.setSelectionRange(L,L);}catch(e){} } }
+}
+function setState(p){ Object.assign(state,p); save(); render(); }
+
+// 予算/変動費ヒントだけを再描画なしで更新（入力中のガタつき防止）
+function updateHints(){
+  const fixedTotal=(state.fixedCosts||[]).reduce((s,f)=>s+(Number(f.amount)||0),0);
+  const variableBudget=Math.max(0,(Number(state.monthlyBudget)||0)-fixedTotal);
+  const weekly=variableBudget>0?variableBudget/4.3:0;
+  const v=document.getElementById("variableVal"); if(v) v.textContent=yen(variableBudget);
+  const w=document.getElementById("weekBudgetVal"); if(w) w.textContent=yen(weekly);
+}
+
+/* ----------------------------- events ----------------------------- */
+app.addEventListener("click",e=>{
+  const el=e.target.closest("[data-action]");
+  if(!el) return;
+  const a=el.dataset.action;
+  if(a==="selectCat") return setState({selectedCat:el.dataset.id});
+  if(a==="key"){
+    const k=el.dataset.k; let v=state.amount;
+    if(k==="back") v=v.slice(0,-1);
+    else if(k==="clear") v="";
+    else if(v.length<7) v=(v===""?(k==="0"?"":k):v+k);
+    return setState({amount:v});
+  }
+  if(a==="record"){
+    if(!(Number(state.amount)>0&&state.selectedCat)) return;
+    const exp={id:uid(),amount:Number(state.amount),categoryId:state.selectedCat,ts:Date.now()};
+    setState({expenses:[exp,...state.expenses],amount:"",justRecorded:true});
+    fireReward();
+    return;
+  }
+  if(a==="delExpense") return setState({expenses:state.expenses.filter(x=>x.id!==el.dataset.id)});
+  if(a==="openSettings") return setState({showSettings:true});
+  if(a==="closeSettings"){
+    const isBackdrop=el.classList.contains("sheet-backdrop");
+    if(isBackdrop&&e.target.closest("[data-stop]")) return; // シート内のタップは無視
+    return setState({showSettings:false});
+  }
+  if(a==="delCat"){
+    const id=el.dataset.id;
+    return setState({categories:state.categories.filter(c=>c.id!==id), selectedCat: state.selectedCat===id?null:state.selectedCat});
+  }
+  if(a==="addCat"){
+    const name=(state.newCatName||"").trim();
+    if(!name) return;
+    const color=PALETTE[state.categories.length%PALETTE.length];
+    return setState({categories:[...state.categories,{id:uid(),name,color,emoji:"🏷️"}], newCatName:""});
+  }
+  if(a==="delFixed"){
+    const id=el.dataset.id;
+    return setState({fixedCosts:(state.fixedCosts||[]).filter(f=>f.id!==id)});
+  }
+  if(a==="addFixed"){
+    const name=(state.newFixName||"").trim();
+    const amt=Number((state.newFixAmt||"").toString().replace(/[^\d]/g,""))||0;
+    if(!name||amt<=0) return;
+    return setState({fixedCosts:[...(state.fixedCosts||[]),{id:uid(),name,amount:amt}], newFixName:"", newFixAmt:""});
+  }
+});
+
+app.addEventListener("input",e=>{
+  const f=e.target.dataset.field;
+  if(f==="budget"){ state.monthlyBudget=Number(e.target.value.replace(/[^\d]/g,""))||0; save(); updateHints(); }
+  else if(f==="newcat"){ state.newCatName=e.target.value; }
+  else if(f==="fixname"){ state.newFixName=e.target.value; }
+  else if(f==="fixamt"){ state.newFixAmt=e.target.value.replace(/[^\d]/g,""); e.target.value=state.newFixAmt; }
+});
+app.addEventListener("keydown",e=>{
+  const f=e.target.dataset.field;
+  if(f==="newcat"&&e.key==="Enter"){ e.preventDefault();
+    const name=(e.target.value||"").trim(); if(!name) return;
+    const color=PALETTE[state.categories.length%PALETTE.length];
+    setState({categories:[...state.categories,{id:uid(),name,color,emoji:"🏷️"}], newCatName:""});
+  }
+  if((f==="fixname"||f==="fixamt")&&e.key==="Enter"){ e.preventDefault();
+    const name=(state.newFixName||"").trim();
+    const amt=Number((state.newFixAmt||"").toString().replace(/[^\d]/g,""))||0;
+    if(!name||amt<=0) return;
+    setState({fixedCosts:[...(state.fixedCosts||[]),{id:uid(),name,amount:amt}], newFixName:"", newFixAmt:""});
+  }
+});
+
+/* ----------------------------- init ----------------------------- */
+load();
+render();
+</script>
+</body>
+</html>
