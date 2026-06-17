@@ -17,7 +17,7 @@
     color:#E8EAF2; min-height:100vh;
   }
   .tnum{font-variant-numeric:tabular-nums;}
-  .wrap{max-width:480px;margin:0 auto;padding:max(env(safe-area-inset-top),20px) 20px calc(env(safe-area-inset-bottom) + 40px);}
+  .wrap{max-width:480px;margin:0 auto;padding:max(env(safe-area-inset-top),20px) 20px calc(env(safe-area-inset-bottom) + 96px);}
   button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit;}
   input{font-family:inherit;}
   .card{border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.035);}
@@ -48,6 +48,9 @@
   @keyframes slideUp{0%{transform:translateY(100%)}100%{transform:none}}
 
   @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+
+  .bottom-nav{position:fixed;left:0;right:0;bottom:0;z-index:50;display:flex;justify-content:center;padding:10px 16px calc(env(safe-area-inset-bottom) + 12px);background:linear-gradient(180deg,rgba(11,13,22,0),#0B0D16 45%);pointer-events:none;}
+  .bottom-nav-inner{pointer-events:auto;display:flex;gap:6px;width:100%;max-width:480px;background:rgba(20,23,42,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.09);border-radius:20px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.45);}
 </style>
 </head>
 <body>
@@ -65,7 +68,8 @@ const SVG = {
   cal:'<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   coin:'<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.5h3.5a1.5 1.5 0 010 3H11a1.5 1.5 0 000 3h3.5"/>',
   shield:'<path d="M12 2l8 4v6c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-4z"/>',
-  spark:'<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17l-1.9-5.1L4.5 10l5.6-1.4L12 3z"/>'
+  spark:'<path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17l-1.9-5.1L4.5 10l5.6-1.4L12 3z"/>',
+  chart:'<path d="M3 3v18h18"/><path d="M7 16v-5M12 16V8M17 16v-10"/>'
 };
 function icon(name, size, color, sw){
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color||'currentColor'}" stroke-width="${sw||2}" stroke-linecap="round" stroke-linejoin="round">${SVG[name]}</svg>`;
@@ -104,13 +108,25 @@ const DEFAULT_CATS=[
   {id:uid(),name:"趣味・娯楽",color:"#A78BFA",emoji:"🎮"},
   {id:uid(),name:"その他",color:"#FBBF24",emoji:"📦"},
 ];
+const INCOME_CATS=[
+  {id:"inc-salary",name:"給料",color:"#34D399",emoji:"💰"},
+  {id:"inc-bonus",name:"ボーナス",color:"#FBBF24",emoji:"🎁"},
+  {id:"inc-side",name:"副業",color:"#22D3EE",emoji:"💻"},
+  {id:"inc-other",name:"その他",color:"#A78BFA",emoji:"✨"},
+];
 let state={
   monthlyBudget:60000,
   categories:JSON.parse(JSON.stringify(DEFAULT_CATS)),
   fixedCosts:[],
   expenses:[],
+  incomes:[],
+  incomeCats:JSON.parse(JSON.stringify(INCOME_CATS)),
   amount:"",
   selectedCat:null,
+  selectedIncomeCat:null,
+  inputMode:"expense",
+  tab:"home",
+  selectedMonth:null,
   showSettings:false,
   newCatName:"",
   newFixName:"",
@@ -126,6 +142,8 @@ function load(){
     if(Array.isArray(d.categories)&&d.categories.length) state.categories=d.categories;
     if(Array.isArray(d.fixedCosts)) state.fixedCosts=d.fixedCosts;
     if(Array.isArray(d.expenses)) state.expenses=d.expenses;
+    if(Array.isArray(d.incomes)) state.incomes=d.incomes;
+    if(Array.isArray(d.incomeCats)&&d.incomeCats.length) state.incomeCats=d.incomeCats;
   }catch(e){}
 }
 function save(){
@@ -135,6 +153,8 @@ function save(){
       categories:state.categories,
       fixedCosts:state.fixedCosts,
       expenses:state.expenses,
+      incomes:state.incomes,
+      incomeCats:state.incomeCats,
     }));
   }catch(e){}
 }
@@ -176,6 +196,32 @@ function derive(){
   return {w,weeklyBudget,weekExp,spent,remaining,hp,chart,month};
 }
 function catById(id){ return state.categories.find(c=>c.id===id)||{name:"削除済み",color:"#64748B",emoji:"🏷️"}; }
+function incCatById(id){ return (state.incomeCats||[]).find(c=>c.id===id)||{name:"その他",color:"#A78BFA",emoji:"✨"}; }
+
+/* ----------------------------- monthly ----------------------------- */
+function ymKey(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); }
+function monthKeyOf(ts){ return ymKey(new Date(ts)); }
+function shiftMonth(key,delta){ const [y,mo]=key.split("-").map(Number); const d=new Date(y,mo-1+delta,1); return ymKey(d); }
+function monthlySeries(n){
+  const now=new Date(); const arr=[];
+  for(let i=n-1;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const key=ymKey(d);
+    const expense=state.expenses.filter(e=>monthKeyOf(e.ts)===key).reduce((s,e)=>s+e.amount,0);
+    const income=(state.incomes||[]).filter(e=>monthKeyOf(e.ts)===key).reduce((s,e)=>s+e.amount,0);
+    arr.push({key,label:(d.getMonth()+1)+"月",expense,income});
+  }
+  return arr;
+}
+function monthDetail(key){
+  const exp=state.expenses.filter(e=>monthKeyOf(e.ts)===key);
+  const inc=(state.incomes||[]).filter(e=>monthKeyOf(e.ts)===key);
+  const expTotal=exp.reduce((s,e)=>s+e.amount,0);
+  const incTotal=inc.reduce((s,e)=>s+e.amount,0);
+  const map={}; exp.forEach(e=>{map[e.categoryId]=(map[e.categoryId]||0)+e.amount;});
+  const cats=Object.entries(map).map(([id,value])=>{const c=catById(id);return {id,value,name:c.name,color:c.color};}).sort((a,b)=>b.value-a.value);
+  return {expTotal,incTotal,net:incTotal-expTotal,cats,incomes:inc};
+}
 
 /* ----------------------------- donut ----------------------------- */
 function donut(data,total){
@@ -195,11 +241,15 @@ function view(){
   const t=hpTheme(d.hp);
   const m=coach(d.hp,d.spent);
   const perDay=d.w.remainingDays>0?d.remaining/d.w.remainingDays:d.remaining;
-  const canRecord=Number(state.amount)>0&&state.selectedCat;
+  const isInc=state.inputMode==="income";
+  const activeCats=isInc?(state.incomeCats||[]):state.categories;
+  const activeSel=isInc?state.selectedIncomeCat:state.selectedCat;
+  const canRecord=Number(state.amount)>0&&activeSel;
 
-  const chips=state.categories.map(c=>{
-    const on=state.selectedCat===c.id;
-    return `<button class="chip row-tap" data-action="selectCat" data-id="${c.id}" style="display:flex;align-items:center;gap:6px;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:700;background:${on?c.color:'rgba(255,255,255,.05)'};color:${on?'#0B0D16':'#C7CBDC'};border:1px solid ${on?c.color:'rgba(255,255,255,.1)'};box-shadow:${on?`0 6px 16px ${c.color}55`:'none'};transition:transform .12s">
+  const chips=activeCats.map(c=>{
+    const on=activeSel===c.id;
+    const act=isInc?"selectIncomeCat":"selectCat";
+    return `<button class="chip row-tap" data-action="${act}" data-id="${c.id}" style="display:flex;align-items:center;gap:6px;border-radius:999px;padding:8px 14px;font-size:14px;font-weight:700;background:${on?c.color:'rgba(255,255,255,.05)'};color:${on?'#0B0D16':'#C7CBDC'};border:1px solid ${on?c.color:'rgba(255,255,255,.1)'};box-shadow:${on?`0 6px 16px ${c.color}55`:'none'};transition:transform .12s">
       <span style="font-size:15px;line-height:1">${c.emoji||"🏷️"}</span>${esc(c.name)}</button>`;
   }).join("");
 
@@ -261,15 +311,29 @@ function view(){
     </div>
   </div>`;
 
-  return `<div class="wrap">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-      <div style="display:flex;align-items:center;gap:10px">
-        <div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:14px;background:linear-gradient(135deg,#818CF8,#6366F1);box-shadow:0 6px 18px rgba(99,102,241,.45)">${icon("shield",20,"#fff",2.4)}</div>
-        <div><h1 style="font-size:18px;font-weight:800;letter-spacing:.03em;line-height:1">週予算クエスト</h1><p style="font-size:12px;margin-top:4px;color:#8A8FA8">HPを守りきれ。今週の冒険。</p></div>
-      </div>
-      <button class="row-tap" data-action="openSettings" aria-label="設定" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)">${icon("gear",19,"#C7CBDC")}</button>
-    </div>
+  const recBg=isInc?"linear-gradient(135deg,#6EE7B7,#34D399)":"linear-gradient(135deg,#A5B4FC,#818CF8)";
+  const recShadow=isInc?"0 10px 26px rgba(52,211,153,.5)":"0 10px 26px rgba(129,140,248,.5)";
+  const recText=canRecord?(isInc?"記録する 💰":"記録する ⚔️"):(activeSel?"金額を入力":(isInc?"内訳を選択":"カテゴリを選択"));
 
+  const inputCard=`<div class="card" style="margin-top:16px;border-radius:26px;padding:18px">
+      <div style="display:flex;gap:6px;padding:4px;border-radius:14px;background:rgba(0,0,0,.25);margin-bottom:14px">
+        <button data-action="setMode" data-mode="expense" style="flex:1;height:38px;border-radius:11px;font-size:14px;font-weight:800;background:${!isInc?'linear-gradient(135deg,#FB7185,#F43F5E)':'transparent'};color:${!isInc?'#fff':'#8A8FA8'};transition:transform .12s">支出</button>
+        <button data-action="setMode" data-mode="income" style="flex:1;height:38px;border-radius:11px;font-size:14px;font-weight:800;background:${isInc?'linear-gradient(135deg,#34D399,#10B981)':'transparent'};color:${isInc?'#fff':'#8A8FA8'};transition:transform .12s">収入</button>
+      </div>
+      <div style="text-align:center;margin-bottom:12px">
+        <p style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:4px">金額</p>
+        <p class="tnum" style="font-size:40px;font-weight:800;letter-spacing:-.02em;color:${state.amount?'#fff':'#454A66'}">${state.amount?yen(Number(state.amount)):"¥0"}</p>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px">
+        ${chips}
+        ${isInc?"":`<button class="chip row-tap" data-action="openSettings" style="display:flex;align-items:center;gap:4px;border-radius:999px;padding:8px 12px;font-size:14px;font-weight:700;background:rgba(255,255,255,.04);color:#8A8FA8;border:1px dashed rgba(255,255,255,.18)">${icon("plus",15,"#8A8FA8")}追加</button>`}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">${pad}</div>
+      <button data-action="record" class="${canRecord&&!isInc?'pulse-ready':''}" style="width:100%;height:56px;border-radius:18px;font-size:17px;font-weight:800;letter-spacing:.04em;cursor:${canRecord?'pointer':'not-allowed'};color:${canRecord?'#0B0D16':'#5A5F7A'};background:${canRecord?recBg:'rgba(255,255,255,.05)'};box-shadow:${canRecord?recShadow:'none'};transition:transform .12s">
+        ${recText}</button>
+    </div>`;
+
+  const homeContent=`
     <div class="coach-pop" style="display:flex;align-items:center;gap:12px;border-radius:16px;padding:12px 16px;margin-bottom:16px;background:${t.soft};border:1px solid ${t.main}55">
       <span style="font-size:30px;line-height:1">${m.face}</span>
       <div style="min-width:0"><p style="font-size:14px;font-weight:800;color:${t.main}">${m.title}</p><p style="font-size:12px;margin-top:2px;line-height:1.4;color:#C2C6D8">${m.text}</p></div>
@@ -297,19 +361,7 @@ function view(){
 
     ${monthBlock}
 
-    <div class="card" style="margin-top:16px;border-radius:26px;padding:18px">
-      <div style="text-align:center;margin-bottom:12px">
-        <p style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:4px">金額</p>
-        <p class="tnum" style="font-size:40px;font-weight:800;letter-spacing:-.02em;color:${state.amount?'#fff':'#454A66'}">${state.amount?yen(Number(state.amount)):"¥0"}</p>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:16px">
-        ${chips}
-        <button class="chip row-tap" data-action="openSettings" style="display:flex;align-items:center;gap:4px;border-radius:999px;padding:8px 12px;font-size:14px;font-weight:700;background:rgba(255,255,255,.04);color:#8A8FA8;border:1px dashed rgba(255,255,255,.18)">${icon("plus",15,"#8A8FA8")}追加</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">${pad}</div>
-      <button data-action="record" class="${canRecord?'pulse-ready':''}" style="width:100%;height:56px;border-radius:18px;font-size:17px;font-weight:800;letter-spacing:.04em;cursor:${canRecord?'pointer':'not-allowed'};color:${canRecord?'#0B0D16':'#5A5F7A'};background:${canRecord?'linear-gradient(135deg,#A5B4FC,#818CF8)':'rgba(255,255,255,.05)'};box-shadow:${canRecord?'0 10px 26px rgba(129,140,248,.5)':'none'};transition:transform .12s">
-        ${canRecord?"記録する ⚔️":(state.selectedCat?"金額を入力":"カテゴリを選択")}</button>
-    </div>
+    ${inputCard}
 
     <div class="card" style="margin-top:16px;border-radius:26px;padding:18px">
       <p style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#8A8FA8;margin-bottom:4px">今週の支出の内訳</p>
@@ -321,9 +373,94 @@ function view(){
       <div style="display:flex;flex-direction:column;gap:8px">
         ${d.weekExp.length===0?'<p style="font-size:14px;text-align:center;padding:16px 0;color:#5A5F7A">今週の記録はまだありません</p>':history}
       </div>
+    </div>`;
+
+  return `<div class="wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:14px;background:linear-gradient(135deg,#818CF8,#6366F1);box-shadow:0 6px 18px rgba(99,102,241,.45)">${icon("shield",20,"#fff",2.4)}</div>
+        <div><h1 style="font-size:18px;font-weight:800;letter-spacing:.03em;line-height:1">週予算クエスト</h1><p style="font-size:12px;margin-top:4px;color:#8A8FA8">${state.tab==='analysis'?'これまでの記録を振り返ろう。':'HPを守りきれ。今週の冒険。'}</p></div>
+      </div>
+      <button class="row-tap" data-action="openSettings" aria-label="設定" style="display:flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08)">${icon("gear",19,"#C7CBDC")}</button>
     </div>
+
+    ${state.tab==='analysis'?analysisView(d):homeContent}
   </div>
+  ${bottomNav()}
   ${state.showSettings?settingsView(d):""}`;
+}
+
+function bottomNav(){
+  const tab=state.tab;
+  const item=(id,label,ic)=>`<button data-action="setTab" data-tab="${id}" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;height:50px;border-radius:14px;background:${tab===id?'rgba(129,140,248,.18)':'transparent'};color:${tab===id?'#A5B4FC':'#8A8FA8'};font-size:11px;font-weight:700;transition:transform .12s">${ic}<span>${label}</span></button>`;
+  return `<div class="bottom-nav"><div class="bottom-nav-inner">
+    ${item('home','ホーム',icon('shield',18,tab==='home'?'#A5B4FC':'#8A8FA8'))}
+    ${item('analysis','分析',icon('chart',18,tab==='analysis'?'#A5B4FC':'#8A8FA8'))}
+  </div></div>`;
+}
+
+function analysisView(d){
+  const series=monthlySeries(6);
+  const max=Math.max(1,...series.map(m=>Math.max(m.expense,m.income)));
+  const H=130;
+  const bars=series.map(m=>{
+    const sel=state.selectedMonth===m.key;
+    const eH=Math.max(m.expense>0?3:0,Math.round(m.expense/max*H));
+    const iH=Math.max(m.income>0?3:0,Math.round(m.income/max*H));
+    return `<button data-action="selMonth" data-key="${m.key}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0;border-radius:12px;background:${sel?'rgba(255,255,255,.06)':'transparent'};transition:transform .12s">
+      <div style="height:${H}px;display:flex;align-items:flex-end;gap:3px">
+        <div style="width:11px;height:${eH}px;border-radius:4px 4px 0 0;background:#818CF8"></div>
+        <div style="width:11px;height:${iH}px;border-radius:4px 4px 0 0;background:#34D399"></div>
+      </div>
+      <span style="font-size:11px;font-weight:${sel?800:600};color:${sel?'#fff':'#8A8FA8'}">${m.label}</span>
+    </button>`;
+  }).join("");
+
+  const det=monthDetail(state.selectedMonth);
+  const prev=monthDetail(shiftMonth(state.selectedMonth,-1));
+  const detName=Number(state.selectedMonth.split("-")[1])+"月";
+  const netColor=det.net>=0?"#34D399":"#FB7185";
+  const diff=det.expTotal-prev.expTotal;
+  const diffColor=diff>0?"#FB7185":"#34D399";
+
+  const catBlock=det.cats.length?`<div style="display:flex;align-items:center;gap:8px;margin-top:14px">
+      <div style="width:130px;height:130px;position:relative;flex-shrink:0">${donut(det.cats,det.expTotal)}
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none"><span style="font-size:11px;color:#8A8FA8">支出</span><span class="tnum" style="font-size:14px;font-weight:800">${yen(det.expTotal)}</span></div></div>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">${det.cats.slice(0,6).map(c=>`<div style="display:flex;align-items:center;justify-content:space-between"><span style="display:flex;align-items:center;gap:7px;font-size:13px;color:#C7CBDC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:8px;height:8px;border-radius:8px;background:${c.color};flex-shrink:0"></span>${esc(c.name)}</span><span class="tnum" style="font-size:13px">${yen(c.value)}</span></div>`).join("")}</div></div>`
+    :`<p style="font-size:13px;text-align:center;padding:18px 0;color:#5A5F7A">この月の支出記録はありません</p>`;
+
+  const incList=det.incomes.length?`<div style="margin-top:14px"><p style="font-size:11px;color:#8A8FA8;margin-bottom:8px">収入の記録</p><div style="display:flex;flex-direction:column;gap:6px">${det.incomes.slice().sort((a,b)=>b.ts-a.ts).map(e=>{const c=incCatById(e.sourceId);return `<div style="display:flex;align-items:center;gap:10px;border-radius:12px;padding:8px 12px;background:rgba(52,211,153,.06)"><span style="font-size:15px">${c.emoji||"✨"}</span><span style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</span><span class="tnum" style="font-size:13px;font-weight:700;color:#34D399">${yen(e.amount)}</span><button class="row-tap" data-action="delIncome" data-id="${e.id}" aria-label="削除" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.04)">${icon("x",14,"#8A8FA8")}</button></div>`;}).join("")}</div></div>`:"";
+
+  return `
+    <div class="card" style="border-radius:24px;padding:18px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <span style="font-size:13px;font-weight:800;letter-spacing:.08em">月別の収支</span>
+        <span style="display:flex;gap:12px;font-size:11px;color:#9AA0B8">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:8px;background:#818CF8"></span>支出</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:8px;background:#34D399"></span>収入</span>
+        </span>
+      </div>
+      <div style="display:flex;align-items:flex-end;gap:4px">${bars}</div>
+      <p style="font-size:11px;color:#7E84A0;text-align:center;margin-top:8px">月をタップすると下に詳細が出ます</p>
+    </div>
+
+    <div class="card" style="border-radius:24px;padding:18px">
+      <p style="font-size:13px;font-weight:800;letter-spacing:.08em;margin-bottom:14px">${detName}の振り返り</p>
+      <div style="display:flex;gap:10px;margin-bottom:10px">
+        <div style="flex:1;border-radius:14px;padding:12px;background:rgba(129,140,248,.1)"><p style="font-size:11px;color:#9AA0B8">支出</p><p class="tnum" style="font-size:18px;font-weight:800;color:#A5B4FC">${yen(det.expTotal)}</p></div>
+        <div style="flex:1;border-radius:14px;padding:12px;background:rgba(52,211,153,.1)"><p style="font-size:11px;color:#9AA0B8">収入</p><p class="tnum" style="font-size:18px;font-weight:800;color:#34D399">${yen(det.incTotal)}</p></div>
+      </div>
+      <div style="border-radius:14px;padding:12px;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:space-between">
+        <span style="font-size:13px;color:#9AA0B8">収支（収入−支出）</span>
+        <span class="tnum" style="font-size:18px;font-weight:800;color:${netColor}">${det.net>=0?"+":""}${yen(det.net)}</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:0 2px">
+        <span style="font-size:12px;color:#9AA0B8">前月比（支出）</span>
+        <span class="tnum" style="font-size:13px;font-weight:700;color:${diffColor}">${diff>0?"+":""}${yen(diff)}</span>
+      </div>
+      ${catBlock}
+      ${incList}
+    </div>`;
 }
 
 function settingsView(d){
@@ -413,7 +550,11 @@ app.addEventListener("click",e=>{
   const el=e.target.closest("[data-action]");
   if(!el) return;
   const a=el.dataset.action;
+  if(a==="setTab") return setState({tab:el.dataset.tab});
+  if(a==="setMode") return setState({inputMode:el.dataset.mode, amount:""});
   if(a==="selectCat") return setState({selectedCat:el.dataset.id});
+  if(a==="selectIncomeCat") return setState({selectedIncomeCat:el.dataset.id});
+  if(a==="selMonth") return setState({selectedMonth:el.dataset.key});
   if(a==="key"){
     const k=el.dataset.k; let v=state.amount;
     if(k==="back") v=v.slice(0,-1);
@@ -422,12 +563,20 @@ app.addEventListener("click",e=>{
     return setState({amount:v});
   }
   if(a==="record"){
+    if(state.inputMode==="income"){
+      if(!(Number(state.amount)>0&&state.selectedIncomeCat)) return;
+      const inc={id:uid(),amount:Number(state.amount),sourceId:state.selectedIncomeCat,ts:Date.now()};
+      setState({incomes:[inc,...(state.incomes||[])],amount:""});
+      fireReward();
+      return;
+    }
     if(!(Number(state.amount)>0&&state.selectedCat)) return;
     const exp={id:uid(),amount:Number(state.amount),categoryId:state.selectedCat,ts:Date.now()};
     setState({expenses:[exp,...state.expenses],amount:"",justRecorded:true});
     fireReward();
     return;
   }
+  if(a==="delIncome") return setState({incomes:(state.incomes||[]).filter(x=>x.id!==el.dataset.id)});
   if(a==="delExpense") return setState({expenses:state.expenses.filter(x=>x.id!==el.dataset.id)});
   if(a==="openSettings") return setState({showSettings:true});
   if(a==="closeSettings"){
@@ -481,6 +630,7 @@ app.addEventListener("keydown",e=>{
 
 /* ----------------------------- init ----------------------------- */
 load();
+if(!state.selectedMonth) state.selectedMonth=ymKey(new Date());
 render();
 </script>
 </body>
