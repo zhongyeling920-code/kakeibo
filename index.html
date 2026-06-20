@@ -122,6 +122,7 @@ let state={
   incomes:[],
   incomeCats:JSON.parse(JSON.stringify(INCOME_CATS)),
   amount:"",
+  memo:"",
   selectedCat:null,
   selectedIncomeCat:null,
   inputMode:"expense",
@@ -282,7 +283,7 @@ function view(){
     const dt=new Date(e.ts).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});
     return `<div class="row-in" style="display:flex;align-items:center;gap:12px;border-radius:16px;padding:10px 14px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.06)">
       <div style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:12px;background:${c.color}22;font-size:17px">${c.emoji||"🏷️"}</div>
-      <div style="flex:1;min-width:0"><p style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</p><p style="font-size:12px;color:#7E84A0">${dt}</p></div>
+      <div style="flex:1;min-width:0"><p style="font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}</p><p style="font-size:12px;color:#7E84A0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e.memo?esc(e.memo)+" ・ ":""}${dt}</p></div>
       <span class="tnum" style="font-size:14px;font-weight:700">${yen(e.amount)}</span>
       <button class="row-tap" data-action="delExpense" data-id="${e.id}" aria-label="削除" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;background:rgba(255,255,255,.04)">${icon("x",15,"#8A8FA8")}</button></div>`;
   }).join("");
@@ -328,7 +329,8 @@ function view(){
         ${chips}
         ${isInc?"":`<button class="chip row-tap" data-action="openSettings" style="display:flex;align-items:center;gap:4px;border-radius:999px;padding:8px 12px;font-size:14px;font-weight:700;background:rgba(255,255,255,.04);color:#8A8FA8;border:1px dashed rgba(255,255,255,.18)">${icon("plus",15,"#8A8FA8")}追加</button>`}
       </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">${pad}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">${pad}</div>
+      <input data-field="memo" data-action="memo" value="${esc(state.memo)}" placeholder="メモ（任意）" maxlength="40" style="width:100%;border-radius:14px;padding:12px 14px;margin-bottom:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);outline:none;font-size:14px;color:#fff">
       <button data-action="record" class="${canRecord&&!isInc?'pulse-ready':''}" style="width:100%;height:56px;border-radius:18px;font-size:17px;font-weight:800;letter-spacing:.04em;cursor:${canRecord?'pointer':'not-allowed'};color:${canRecord?'#0B0D16':'#5A5F7A'};background:${canRecord?recBg:'rgba(255,255,255,.05)'};box-shadow:${canRecord?recShadow:'none'};transition:transform .12s">
         ${recText}</button>
     </div>`;
@@ -429,7 +431,7 @@ function analysisView(d){
       <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px">${det.cats.slice(0,6).map(c=>`<div style="display:flex;align-items:center;justify-content:space-between"><span style="display:flex;align-items:center;gap:7px;font-size:13px;color:#C7CBDC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><span style="width:8px;height:8px;border-radius:8px;background:${c.color};flex-shrink:0"></span>${esc(c.name)}</span><span class="tnum" style="font-size:13px">${yen(c.value)}</span></div>`).join("")}</div></div>`
     :`<p style="font-size:13px;text-align:center;padding:18px 0;color:#5A5F7A">この月の支出記録はありません</p>`;
 
-  const incList=det.incomes.length?`<div style="margin-top:14px"><p style="font-size:11px;color:#8A8FA8;margin-bottom:8px">収入の記録</p><div style="display:flex;flex-direction:column;gap:6px">${det.incomes.slice().sort((a,b)=>b.ts-a.ts).map(e=>{const c=incCatById(e.sourceId);return `<div style="display:flex;align-items:center;gap:10px;border-radius:12px;padding:8px 12px;background:rgba(52,211,153,.06)"><span style="font-size:15px">${c.emoji||"✨"}</span><span style="flex:1;font-size:13px;font-weight:700">${esc(c.name)}</span><span class="tnum" style="font-size:13px;font-weight:700;color:#34D399">${yen(e.amount)}</span><button class="row-tap" data-action="delIncome" data-id="${e.id}" aria-label="削除" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.04)">${icon("x",14,"#8A8FA8")}</button></div>`;}).join("")}</div></div>`:"";
+  const incList=det.incomes.length?`<div style="margin-top:14px"><p style="font-size:11px;color:#8A8FA8;margin-bottom:8px">収入の記録</p><div style="display:flex;flex-direction:column;gap:6px">${det.incomes.slice().sort((a,b)=>b.ts-a.ts).map(e=>{const c=incCatById(e.sourceId);return `<div style="display:flex;align-items:center;gap:10px;border-radius:12px;padding:8px 12px;background:rgba(52,211,153,.06)"><span style="font-size:15px">${c.emoji||"✨"}</span><span style="flex:1;min-width:0;font-size:13px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.name)}${e.memo?'<span style="color:#7E84A0;font-weight:400"> ・ '+esc(e.memo)+'</span>':''}</span><span class="tnum" style="font-size:13px;font-weight:700;color:#34D399">${yen(e.amount)}</span><button class="row-tap" data-action="delIncome" data-id="${e.id}" aria-label="削除" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:rgba(255,255,255,.04)">${icon("x",14,"#8A8FA8")}</button></div>`;}).join("")}</div></div>`:"";
 
   return `
     <div class="card" style="border-radius:24px;padding:18px;margin-bottom:16px">
@@ -551,7 +553,7 @@ app.addEventListener("click",e=>{
   if(!el) return;
   const a=el.dataset.action;
   if(a==="setTab") return setState({tab:el.dataset.tab});
-  if(a==="setMode") return setState({inputMode:el.dataset.mode, amount:""});
+  if(a==="setMode") return setState({inputMode:el.dataset.mode, amount:"", memo:""});
   if(a==="selectCat") return setState({selectedCat:el.dataset.id});
   if(a==="selectIncomeCat") return setState({selectedIncomeCat:el.dataset.id});
   if(a==="selMonth") return setState({selectedMonth:el.dataset.key});
@@ -563,16 +565,17 @@ app.addEventListener("click",e=>{
     return setState({amount:v});
   }
   if(a==="record"){
+    const memo=(state.memo||"").trim();
     if(state.inputMode==="income"){
       if(!(Number(state.amount)>0&&state.selectedIncomeCat)) return;
-      const inc={id:uid(),amount:Number(state.amount),sourceId:state.selectedIncomeCat,ts:Date.now()};
-      setState({incomes:[inc,...(state.incomes||[])],amount:""});
+      const inc={id:uid(),amount:Number(state.amount),sourceId:state.selectedIncomeCat,memo,ts:Date.now()};
+      setState({incomes:[inc,...(state.incomes||[])],amount:"",memo:""});
       fireReward();
       return;
     }
     if(!(Number(state.amount)>0&&state.selectedCat)) return;
-    const exp={id:uid(),amount:Number(state.amount),categoryId:state.selectedCat,ts:Date.now()};
-    setState({expenses:[exp,...state.expenses],amount:"",justRecorded:true});
+    const exp={id:uid(),amount:Number(state.amount),categoryId:state.selectedCat,memo,ts:Date.now()};
+    setState({expenses:[exp,...state.expenses],amount:"",memo:"",justRecorded:true});
     fireReward();
     return;
   }
@@ -609,6 +612,7 @@ app.addEventListener("click",e=>{
 app.addEventListener("input",e=>{
   const f=e.target.dataset.field;
   if(f==="budget"){ state.monthlyBudget=Number(e.target.value.replace(/[^\d]/g,""))||0; save(); updateHints(); }
+  else if(f==="memo"){ state.memo=e.target.value; }
   else if(f==="newcat"){ state.newCatName=e.target.value; }
   else if(f==="fixname"){ state.newFixName=e.target.value; }
   else if(f==="fixamt"){ state.newFixAmt=e.target.value.replace(/[^\d]/g,""); e.target.value=state.newFixAmt; }
