@@ -330,7 +330,7 @@ function view(){
         ${isInc?"":`<button class="chip row-tap" data-action="openSettings" style="display:flex;align-items:center;gap:4px;border-radius:999px;padding:8px 12px;font-size:14px;font-weight:700;background:rgba(255,255,255,.04);color:#8A8FA8;border:1px dashed rgba(255,255,255,.18)">${icon("plus",15,"#8A8FA8")}追加</button>`}
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">${pad}</div>
-      <input data-field="memo" data-action="memo" value="${esc(state.memo)}" placeholder="メモ（任意）" maxlength="40" style="width:100%;border-radius:14px;padding:12px 14px;margin-bottom:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);outline:none;font-size:14px;color:#fff">
+      <textarea data-field="memo" data-action="memo" rows="2" maxlength="120" placeholder="メモ（任意・改行できます）" style="width:100%;box-sizing:border-box;border-radius:14px;padding:12px 14px;margin-bottom:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);outline:none;font-size:14px;line-height:1.5;color:#fff;resize:none;font-family:inherit">${esc(state.memo)}</textarea>
       <button data-action="record" class="${canRecord&&!isInc?'pulse-ready':''}" style="width:100%;height:56px;border-radius:18px;font-size:17px;font-weight:800;letter-spacing:.04em;cursor:${canRecord?'pointer':'not-allowed'};color:${canRecord?'#0B0D16':'#5A5F7A'};background:${canRecord?recBg:'rgba(255,255,255,.05)'};box-shadow:${canRecord?recShadow:'none'};transition:transform .12s">
         ${recText}</button>
     </div>`;
